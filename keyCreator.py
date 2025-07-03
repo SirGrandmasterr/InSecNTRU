@@ -30,12 +30,12 @@ def poly_inverse_ring(poly : np.ndarray, N : int, mod : int) -> np.ndarray:
 def key_gen(N : int, p : int, q : int, max_tries=100) -> tuple:
     for _ in range(max_tries):
         f = gen_rdm_ntru_poly(N)
-        #f_p = poly_inverse_ring(f, N, p) # can be included for faster decryption
+        f_p = poly_inverse_ring(f, N, p)
         f_q = poly_inverse_ring(f, N, q)
-        if f_q is not None: #and f_p is not None:
+        if f_q is not None and f_p is not None:
             g = gen_rdm_ntru_poly(N)
             h = poly_mul_ring(f_q, g, N, q)
 
-            return h, f # pubkey, privkey
+            return h, f, f_p
         
     raise ValueError("Maximum tries exceeded while generating private key polynomials.")
