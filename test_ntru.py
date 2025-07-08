@@ -5,6 +5,7 @@ import numpy as np
 import random
 import sys
 import os
+from ntru_keygen import NTRUKeyGeneration
 
 # Ensure the ntru_implementation.py file is in the same directory or on the Python path
 try:
@@ -15,7 +16,6 @@ try:
         poly_mod_centered,
         poly_invert, # This is the most complex function to implement
         generate_random_poly,
-        ntru_key_generation,
         ntru_encrypt,
         ntru_decrypt
     )
@@ -24,6 +24,8 @@ except ImportError:
     print("Please ensure 'ntru_implementation.py' is in the same directory.")
     sys.exit(1)
 
+    
+
 class TestNTRU(unittest.TestCase):
 
     def setUp(self):
@@ -31,9 +33,9 @@ class TestNTRU(unittest.TestCase):
         Set up common parameters for tests.
         These are small parameters suitable for testing, not for production security.
         """
-        self.N = 107  # A small prime N
-        self.p = 3  # Small modulus
-        self.q = 64 # Larger modulus, coprime to p
+        self.N = 509  # A small prime N
+        self.p = 7  # Small modulus
+        self.q = 2048 # Larger modulus, coprime to p
 
         # Number of 1s and -1s for polynomials f, g, r
         # For N=7, these values are small.
@@ -45,7 +47,7 @@ class TestNTRU(unittest.TestCase):
 
         # Example message parameters (usually small coefficients)
         self.dm = 1 # Number of 1s and -1s in the message polynomial
-
+        self.ntru_keygen = NTRUKeyGeneration()
         print(f"\n--- Running tests with N={self.N}, p={self.p}, q={self.q} ---")
 
     def assertPolyEqual(self, poly1, poly2, msg=None):
@@ -200,17 +202,15 @@ class TestNTRU(unittest.TestCase):
 
         # Key Generation
         print("Generating keys...")
-        f, fp_inv, fq_inv, h = ntru_key_generation(self.N, self.p, self.q, self.df, self.dg)
+        public_key, private_key, invFmodP = self.ntru_keygen.key_gen(self.N, self.p, self.q, 100)
 
-        self.assertIsNotNone(f, "Key generation failed: f is None")
-        self.assertIsNotNone(fp_inv, "Key generation failed: fp_inv is None")
-        self.assertIsNotNone(fq_inv, "Key generation failed: fq_inv is None")
-        self.assertIsNotNone(h, "Key generation failed: h is None")
+        self.assertIsNotNone(public_key, "Key generation failed: f is None")
+        self.assertIsNotNone(private_key, "Key generation failed: fp_inv is None")
+        self.assertIsNotNone(invFmodP, "Key generation failed: fq_inv is None")
 
-        print(f"Generated f: {f}")
-        print(f"Generated fp_inv: {fp_inv}")
-        print(f"Generated fq_inv: {fq_inv}")
-        print(f"Generated h: {h}")
+        print(f"Generated publicKey: {public_key}")
+        print(f"Generated privateKey: {private_key}")
+        print(f"Generated invFmodP: {invFmodP}")
 
         # Message Generation
         # A simple message polynomial (e.g., 1, 0, -1, 0, ...)
@@ -223,14 +223,14 @@ class TestNTRU(unittest.TestCase):
 
         # Encryption
         print("Encrypting message...")
-        ciphertext = ntru_encrypt(message_poly, blinding_poly, h, self.N, self.p, self.q)
+        ciphertext = ntru_encrypt(message_poly, blinding_poly, public_key, self.N, self.p, self.q)
         self.assertIsNotNone(ciphertext, "Encryption failed: ciphertext is None")
         self.assertEqual(len(ciphertext), self.N, "Ciphertext has incorrect length")
         print(f"Ciphertext e: {ciphertext}")
 
         # Decryption
         print("Decrypting ciphertext...")
-        decrypted_message = ntru_decrypt(ciphertext, f, fp_inv, self.N, self.p, self.q)
+        decrypted_message = ntru_decrypt(ciphertext, private_key, invFmodP, self.N, self.p, self.q)
         self.assertIsNotNone(decrypted_message, "Decryption failed: decrypted_message is None")
         self.assertEqual(len(decrypted_message), self.N, "Decrypted message has incorrect length")
         print(f"Decrypted message m': {decrypted_message}")
@@ -247,22 +247,22 @@ class TestNTRU(unittest.TestCase):
         for i in range(num_tests):
             print(f"\n--- Running cycle {i+1}/{num_tests} ---")
             # Key Generation
-            f, fp_inv, fq_inv, h = ntru_key_generation(self.N, self.p, self.q, self.df, self.dg)
-            self.assertIsNotNone(f, "Key generation failed in multiple cycles")
-            self.assertIsNotNone(fp_inv, "Key generation failed in multiple cycles")
-            self.assertIsNotNone(fq_inv, "Key generation failed in multiple cycles")
-            self.assertIsNotNone(h, "Key generation failed in multiple cycles")
+            public_key, private_key, invFmodP = self.ntru_keygen.key_gen(self.N, self.p, self.q, 100)
+            self.assertIsNotNone(public_key, "Key generation failed in multiple cycles")
+            self.assertIsNotNone(private_key, "Key generation failed in multiple cycles")
+            self.assertIsNotNone(invFmodP, "Key generation failed in multiple cycles")
+            
 
             # Message and Blinding Polynomial Generation
             message_poly = generate_random_poly(self.N, self.dm, self.dm)
             blinding_poly = generate_random_poly(self.N, self.dr, self.dr)
 
             # Encryption
-            ciphertext = ntru_encrypt(message_poly, blinding_poly, h, self.N, self.p, self.q)
+            ciphertext = ntru_encrypt(message_poly, blinding_poly, public_key, self.N, self.p, self.q)
             self.assertIsNotNone(ciphertext, "Encryption failed in multiple cycles")
 
             # Decryption
-            decrypted_message = ntru_decrypt(ciphertext, f, fp_inv, self.N, self.p, self.q)
+            decrypted_message = ntru_decrypt(ciphertext, private_key, invFmodP, self.N, self.p, self.q)
             self.assertIsNotNone(decrypted_message, "Decryption failed in multiple cycles")
 
             # Verify Decryption
