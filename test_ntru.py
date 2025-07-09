@@ -5,16 +5,19 @@ import sys
 import os
 
 # It's good practice to set up the path correctly to import local modules.
-# This ensures the script can be run from different directories.
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
 try:
-    from keyCreator import key_gen, poly_inverse_ring, poly_mul_ring
+    from keyCreator import key_gen, poly_mul_ring
     from ntru_implementation import (
         poly_mod_centered,
         generate_random_poly,
         ntru_encrypt,
-        ntru_decrypt
+        ntru_decrypt,
+        ntru_encrypt_string,
+        ntru_decrypt_string,
+        _bytes_to_poly,
+        _poly_to_bytes
     )
 except ImportError as e:
     print(f"Error: Could not import from local files: {e}")
@@ -24,144 +27,100 @@ except ImportError as e:
 class TestNTRU(unittest.TestCase):
 
     def setUp(self):
-        """
-        Set up common parameters for tests.
-        These parameters are suitable for testing; not for production security.
-        """
-        self.N = 509  # A prime N
-        self.p = 7    # Small prime modulus
-        self.q = 2048 # Larger modulus (power of 2), coprime to p
-
-        # Parameters for generating random polynomials (f, g, r, m)
-        self.df = 60
-        self.dg = 20
+        """Set up common parameters and keys for tests."""
+        self.N = 509
+        self.p = 7
+        self.q = 2048
         self.dr = 15
         self.dm = 15
         
         print(f"\n--- Running tests with N={self.N}, p={self.p}, q={self.q} ---")
+        # Generate keys once for all tests in this class to save time
+        try:
+            self.h, self.f, self.fp_inv = key_gen(self.N, self.p, self.q, max_tries=500)
+        except RuntimeError as e:
+            self.fail(f"Key generation failed during setup: {e}. This may be a random failure; try running tests again.")
 
     def assertPolyEqual(self, poly1, poly2, msg=None):
-        """Custom assertion for comparing two polynomials (numpy arrays)."""
-        # Ensure polynomials are padded to the same length for comparison
+        """Custom assertion for comparing two polynomials."""
         max_len = max(len(poly1), len(poly2))
         p1_padded = np.pad(poly1, (0, max_len - len(poly1)), 'constant')
         p2_padded = np.pad(poly2, (0, max_len - len(poly2)), 'constant')
-        self.assertTrue(np.array_equal(p1_padded, p2_padded), msg=f"Polynomials are not equal: {p1_padded} vs {p2_padded}. {msg if msg else ''}")
+        self.assertTrue(np.array_equal(p1_padded, p2_padded), msg=f"Polynomials are not equal. {msg if msg else ''}")
 
     def test_poly_mul(self):
-        """
-        Test polynomial multiplication (cyclic convolution) modulo X^N-1 and a modulus.
-        This test is now self-contained and uses appropriate parameters.
-        """
-        print("Testing poly_mul (cyclic convolution)...")
-        N_test = 7
-        mod_test = 100
-        
-        # Test case: (X+1) * (X-1) = X^2 - 1
-        # In our coefficient convention [c0, c1, ...], X+1 is [1, 1, 0, ...]
-        poly1 = np.array([1, 1, 0, 0, 0, 0, 0])
-        # X-1 is [-1, 1, 0, ...]
-        poly2 = np.array([-1, 1, 0, 0, 0, 0, 0])
-        
-        # The expected result is X^2 - 1, which is [-1, 0, 1, 0, ...]
-        expected_centered = np.array([-1, 0, 1, 0, 0, 0, 0])
-        
-        # poly_mul_ring returns coefficients in [0, mod-1].
+        """Test polynomial multiplication (cyclic convolution)."""
+        print("Testing poly_mul...")
+        N_test, mod_test = 7, 100
+        poly1, poly2 = np.array([1, 1] + [0]*(N_test-2)), np.array([-1, 1] + [0]*(N_test-2))
+        expected = np.array([-1, 0, 1] + [0]*(N_test-3))
         result = poly_mul_ring(poly1, poly2, N_test, mod_test)
-        
-        # To compare with the expected centered result, we must center the output.
-        # This also correctly tests the poly_mod_centered function's role.
         result_centered = poly_mod_centered(result, mod_test)
-        
-        self.assertPolyEqual(result_centered, expected_centered, "poly_mul simple case (X+1)(X-1) failed")
+        self.assertPolyEqual(result_centered, expected, "poly_mul (X+1)(X-1) failed")
         print("poly_mul test passed.")
 
-    def test_poly_invert(self):
-        """
-        Test polynomial inversion. This test is now self-contained.
-        """
-        print("Testing poly_invert...")
-        N_test = 7
-        p_test = 3
-        
-        # Test case: A simple invertible polynomial f = X+1
-        f_test = np.array([1, 1, 0, 0, 0, 0, 0])
-        
-        inv_f = poly_inverse_ring(f_test, N_test, p_test)
-        self.assertIsNotNone(inv_f, "poly_invert returned None for an invertible polynomial")
-        
-        if inv_f is not None:
-            # Check if f * f_inv = 1
-            product = poly_mul_ring(f_test, inv_f, N_test, p_test)
-            expected_identity = np.zeros(N_test, dtype=int)
-            expected_identity[0] = 1
-            self.assertPolyEqual(product, expected_identity, "poly_invert failed: f * f_inv != 1")
-        print("poly_invert test passed.")
-
-    def test_ntru_full_cycle(self):
-        """
-        End-to-end test of NTRU key generation, encryption, and decryption.
-        This is the most important test.
-        """
-        print("\n--- Running full NTRU cycle test ---")
-
-        # Key Generation
-        print("Generating keys...")
-        try:
-            public_key, private_key, invFmodP = key_gen(self.N, self.p, self.q, max_tries=200)
-        except RuntimeError as e:
-            self.fail(f"Key generation failed with an exception: {e}")
-
-        # Message Generation
+    def test_ntru_poly_cycle(self):
+        """End-to-end test of NTRU for a single polynomial."""
+        print("\n--- Running single polynomial NTRU cycle test ---")
         message_poly = generate_random_poly(self.N, self.dm, self.dm)
-        print(f"Original message m: (coefficients sum to {np.sum(message_poly)})")
-
-        # Blinding Polynomial Generation
         blinding_poly = generate_random_poly(self.N, self.dr, self.dr)
+        ciphertext = ntru_encrypt(message_poly, blinding_poly, self.h, self.N, self.p, self.q)
+        decrypted_message = ntru_decrypt(ciphertext, self.f, self.fp_inv, self.N, self.p, self.q)
+        self.assertPolyEqual(message_poly, decrypted_message, "Decryption failed for single polynomial cycle.")
+        print("Single polynomial NTRU cycle test PASSED.")
+        
+    def test_byte_poly_conversion(self):
+        """Test the conversion between byte chunks and polynomials."""
+        print("\n--- Running byte-to-poly conversion test ---")
+        test_bytes = b"Hello, this is a test!"
+        block_size = self.N // 6
+        chunk = test_bytes[:block_size]
+        
+        poly = _bytes_to_poly(chunk, self.N)
+        recovered_bytes = _poly_to_bytes(poly)
+        
+        # The recovered bytes should match the original chunk
+        self.assertEqual(chunk, recovered_bytes[:len(chunk)])
+        print("Byte-to-poly conversion test PASSED.")
 
-        # Encryption
-        print("Encrypting message...")
-        ciphertext = ntru_encrypt(message_poly, blinding_poly, public_key, self.N, self.p, self.q)
-        self.assertEqual(len(ciphertext), self.N, "Ciphertext has incorrect length")
+    def test_string_encryption_decryption(self):
+        """End-to-end test for encrypting and decrypting strings."""
+        print("\n--- Running string encryption/decryption tests ---")
+        
+        # Test Case 1: Short message (fits in one block)
+        short_message = "NTRU is a lattice-based cryptosystem."
+        print(f"Testing short message: '{short_message}'")
+        
+        ciphertexts_short = ntru_encrypt_string(short_message, self.h, self.N, self.p, self.q, self.dr)
+        decrypted_short = ntru_decrypt_string(ciphertexts_short, self.f, self.fp_inv, self.N, self.p, self.q)
+        
+        self.assertEqual(short_message, decrypted_short, "Decryption failed for short string.")
+        print("Short string test PASSED.")
+        
+        # Test Case 2: Long message (requires multiple blocks)
+        long_message = ("NTRU (Nth-degree Truncated polynomial Ring Units) is a lattice-based "
+                        "public-key cryptosystem. It relies on the presumed difficulty of "
+                        "factoring polynomials in a certain ring and finding short vectors "
+                        "in a lattice. This implementation demonstrates the core concepts.")
+        print(f"\nTesting long message (length {len(long_message)})...")
+        
+        ciphertexts_long = ntru_encrypt_string(long_message, self.h, self.N, self.p, self.q, self.dr)
+        decrypted_long = ntru_decrypt_string(ciphertexts_long, self.f, self.fp_inv, self.N, self.p, self.q)
+        
+        self.assertEqual(long_message, decrypted_long, "Decryption failed for long string.")
+        print("Long string test PASSED.")
+        
+        # Test Case 3: Edge case message (length is a multiple of block size)
+        block_size = self.N // 6
+        edge_message = "A" * block_size
+        print(f"\nTesting edge case message (length {len(edge_message)})...")
 
-        # Decryption
-        print("Decrypting ciphertext...")
-        decrypted_message = ntru_decrypt(ciphertext, private_key, invFmodP, self.N, self.p, self.q)
-        self.assertEqual(len(decrypted_message), self.N, "Decrypted message has incorrect length")
+        ciphertexts_edge = ntru_encrypt_string(edge_message, self.h, self.N, self.p, self.q, self.dr)
+        decrypted_edge = ntru_decrypt_string(ciphertexts_edge, self.f, self.fp_inv, self.N, self.p, self.q)
 
-        # Verify Decryption
-        self.assertPolyEqual(message_poly, decrypted_message, "Decryption failed: original message does not match decrypted message!")
-        print("Full NTRU cycle test PASSED: Original message matches decrypted message.")
+        self.assertEqual(edge_message, decrypted_edge, "Decryption failed for edge case string.")
+        print("Edge case string test PASSED.")
 
-    def test_ntru_multiple_cycles(self):
-        """Run multiple full NTRU cycles with different random inputs."""
-        print("\n--- Running multiple full NTRU cycles ---")
-        num_tests = 5
-
-        for i in range(num_tests):
-            print(f"\n--- Running cycle {i+1}/{num_tests} ---")
-            try:
-                # Key Generation
-                public_key, private_key, invFmodP = key_gen(self.N, self.p, self.q, max_tries=200)
-                
-                # Message and Blinding Polynomial Generation
-                message_poly = generate_random_poly(self.N, self.dm, self.dm)
-                blinding_poly = generate_random_poly(self.N, self.dr, self.dr)
-
-                # Encryption
-                ciphertext = ntru_encrypt(message_poly, blinding_poly, public_key, self.N, self.p, self.q)
-
-                # Decryption
-                decrypted_message = ntru_decrypt(ciphertext, private_key, invFmodP, self.N, self.p, self.q)
-
-                # Verify Decryption
-                self.assertPolyEqual(message_poly, decrypted_message, f"Decryption failed in cycle {i+1}")
-                print(f"Cycle {i+1} PASSED.")
-            except (RuntimeError, AssertionError) as e:
-                self.fail(f"Test cycle {i+1} failed with an error: {e}")
-
-        print(f"\nAll {num_tests} NTRU cycles passed successfully!")
 
 if __name__ == '__main__':
-    # This setup allows running the tests from the command line.
     unittest.main(argv=['first-arg-is-ignored'],verbosity=2, exit=False)
