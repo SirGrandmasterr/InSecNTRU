@@ -11,7 +11,6 @@ from keyCreator import key_gen, poly_inverse_ring, poly_mul_ring
 try:
     from ntru_implementation import (
         poly_add,
-        poly_mul,
         poly_mod_coeffs,
         poly_mod_centered,
         generate_random_poly,
@@ -82,7 +81,7 @@ class TestNTRU(unittest.TestCase):
         N_test = 7
         mod_test = 100 # Large enough not to affect coefficients for now
         expected = np.array([-1, 0, 1, 0, 0, 0, 0]) # X^2-1
-        result = poly_mul(poly1, poly2, N_test, mod_test)
+        result = poly_mul_ring(poly1, poly2, N_test, mod_test)
         self.assertPolyEqual(result, expected, "poly_mul simple case (X+1)(X-1) failed")
 
         # Test cyclic property: X^(N-1) * X = X^N = 1 mod (X^N-1)
@@ -92,7 +91,7 @@ class TestNTRU(unittest.TestCase):
         poly_x[1] = 1 # X
         expected_cyclic = np.zeros(N_test)
         expected_cyclic[0] = 1 # 1
-        result_cyclic = poly_mul(poly_x_n_minus_1, poly_x, N_test, mod_test)
+        result_cyclic = poly_mul_ring(poly_x_n_minus_1, poly_x, N_test, mod_test)
         self.assertPolyEqual(result_cyclic, expected_cyclic, "poly_mul cyclic property failed (X^(N-1) * X)")
 
         # Test with coefficients wrapping around modulus
@@ -104,7 +103,7 @@ class TestNTRU(unittest.TestCase):
         # a0b0 + a1b1 = 1*3 + 2*4 = 3 + 8 = 11 => 1 mod 5
         # a0b1 + a1b0 = 1*4 + 2*3 = 4 + 6 = 10 => 0 mod 5
         expected_wrap = np.array([1, 0])
-        result_wrap = poly_mul(poly_a, poly_b, N_small, mod_small)
+        result_wrap = poly_mul_ring(poly_a, poly_b, N_small, mod_small)
         self.assertPolyEqual(result_wrap, expected_wrap, "poly_mul with modulus wrap failed")
         print("poly_mul test passed.")
 
@@ -271,14 +270,5 @@ class TestNTRU(unittest.TestCase):
         print(f"\nAll {num_tests} NTRU cycles passed successfully!")
 
 if __name__ == '__main__':
-    # Add a note for the user about the poly_invert implementation
-    print("\n--- IMPORTANT NOTE FOR IMPLEMENTATION ---")
-    print("The `poly_invert` function (polynomial extended Euclidean algorithm)")
-    print("is the most complex part of NTRU implementation. Ensure your version")
-    print("in `ntru_implementation.py` is robust and handles all cases, including")
-    print("when an inverse does not exist (e.g., by returning None).")
-    print("A simple brute-force approach for `poly_invert` will likely be too slow")
-    print("for larger N values and might not correctly handle all modular arithmetic.")
-    print("-----------------------------------------\n")
 
     unittest.main(argv=['first-arg-is-ignored'], exit=False) # exit=False to allow running in environments like Jupyter

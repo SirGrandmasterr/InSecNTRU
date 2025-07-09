@@ -21,20 +21,6 @@ def poly_add(poly1, poly2, modulus):
         res[i] = (coeff1 + coeff2) % modulus
     return res
 
-def poly_mul(poly1, poly2, N, modulus):
-    """
-    Performs cyclic convolution (polynomial multiplication modulo X^N - 1).
-    Coefficients are taken modulo `modulus`.
-    """
-    result_coeffs = np.zeros(N, dtype=int)
-    for i in range(N):
-        for j in range(N):
-            # Calculate the index for the result polynomial (k = i + j mod N)
-            k = (i + j) % N
-            # Add the product of coefficients to the result at index k
-            result_coeffs[k] = (result_coeffs[k] + poly1[i] * poly2[j]) % modulus
-    return result_coeffs
-
 def poly_mod_coeffs(poly, modulus):
     """
     Reduces all coefficients of a polynomial modulo `modulus` to be in [0, modulus-1).
