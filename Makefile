@@ -2,8 +2,8 @@
 
 .PHONY: all install test clean venv
 
-PYTHON_EXEC = ./.venv/bin/python
-PIP_EXEC = ./.venv/bin/pip
+PYTHON_EXEC = ./.venv/Scripts/python
+PIP_EXEC = ./.venv/Scripts/pip
 
 all: install test
 

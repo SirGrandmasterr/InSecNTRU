@@ -5,7 +5,7 @@ import numpy as np
 import random
 import sys
 import os
-from ntru_keygen import NTRUKeyGeneration
+from keyCreator import key_gen, poly_inverse_ring, poly_mul_ring
 
 # Ensure the ntru_implementation.py file is in the same directory or on the Python path
 try:
@@ -14,7 +14,6 @@ try:
         poly_mul,
         poly_mod_coeffs,
         poly_mod_centered,
-        poly_invert, # This is the most complex function to implement
         generate_random_poly,
         ntru_encrypt,
         ntru_decrypt
@@ -47,7 +46,7 @@ class TestNTRU(unittest.TestCase):
 
         # Example message parameters (usually small coefficients)
         self.dm = 1 # Number of 1s and -1s in the message polynomial
-        self.ntru_keygen = NTRUKeyGeneration()
+        
         print(f"\n--- Running tests with N={self.N}, p={self.p}, q={self.q} ---")
 
     def assertPolyEqual(self, poly1, poly2, msg=None):
@@ -153,20 +152,20 @@ class TestNTRU(unittest.TestCase):
         # Test case 1: A simple invertible polynomial
         # For N=7, p=3, f = X^2 + X + 1
         f_test_p = np.array([1, 1, 1, 0, 0, 0, 0])
-        inv_f_p = poly_invert(f_test_p, self.N, self.p)
+        inv_f_p = poly_inverse_ring(f_test_p, self.N, self.p)
         self.assertIsNotNone(inv_f_p, "poly_invert returned None for a potentially invertible poly (mod p)")
         if inv_f_p is not None:
-            product_p = poly_mul(f_test_p, inv_f_p, self.N, self.p)
+            product_p = poly_mul_ring(f_test_p, inv_f_p, self.N, self.p)
             expected_p = np.zeros(self.N)
             expected_p[0] = 1 # Should be 1 mod (X^N-1)
             self.assertPolyEqual(product_p, expected_p, "poly_invert (mod p) failed: f * f_inv != 1")
 
         # Test case 2: For N=7, q=41, f = X^2 + X + 1
         f_test_q = np.array([1, 1, 1, 0, 0, 0, 0])
-        inv_f_q = poly_invert(f_test_q, self.N, self.q)
+        inv_f_q = poly_inverse_ring(f_test_q, self.N, self.q)
         self.assertIsNotNone(inv_f_q, "poly_invert returned None for a potentially invertible poly (mod q)")
         if inv_f_q is not None:
-            product_q = poly_mul(f_test_q, inv_f_q, self.N, self.q)
+            product_q = poly_mul_ring(f_test_q, inv_f_q, self.N, self.q)
             expected_q = np.zeros(self.N)
             expected_q[0] = 1 # Should be 1 mod (X^N-1)
             self.assertPolyEqual(product_q, expected_q, "poly_invert (mod q) failed: f * f_inv != 1")
@@ -175,7 +174,7 @@ class TestNTRU(unittest.TestCase):
         # For N=7, (X-1) is a factor of X^7-1. So, if f=(X-1), it should not be invertible.
         # This test might require specific handling in your poly_invert to return None or raise an error.
         f_non_invertible = np.array([-1, 1, 0, 0, 0, 0, 0]) # X-1
-        inv_non_inv = poly_invert(f_non_invertible, self.N, self.p) # Or self.q
+        inv_non_inv = poly_inverse_ring(f_non_invertible, self.N, self.p) # Or self.q
         self.assertIsNone(inv_non_inv, "poly_invert returned an inverse for a non-invertible polynomial")
         print("poly_invert test passed (check for None for non-invertible cases).")
 
@@ -202,7 +201,7 @@ class TestNTRU(unittest.TestCase):
 
         # Key Generation
         print("Generating keys...")
-        public_key, private_key, invFmodP = self.ntru_keygen.key_gen(self.N, self.p, self.q, 100)
+        public_key, private_key, invFmodP = key_gen(self.N, self.p, self.q, 100)
 
         self.assertIsNotNone(public_key, "Key generation failed: f is None")
         self.assertIsNotNone(private_key, "Key generation failed: fp_inv is None")
@@ -247,7 +246,7 @@ class TestNTRU(unittest.TestCase):
         for i in range(num_tests):
             print(f"\n--- Running cycle {i+1}/{num_tests} ---")
             # Key Generation
-            public_key, private_key, invFmodP = self.ntru_keygen.key_gen(self.N, self.p, self.q, 100)
+            public_key, private_key, invFmodP = key_gen(self.N, self.p, self.q, 100)
             self.assertIsNotNone(public_key, "Key generation failed in multiple cycles")
             self.assertIsNotNone(private_key, "Key generation failed in multiple cycles")
             self.assertIsNotNone(invFmodP, "Key generation failed in multiple cycles")

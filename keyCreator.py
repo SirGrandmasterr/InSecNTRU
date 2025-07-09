@@ -17,14 +17,17 @@ def poly_mul_ring(poly1 : np.ndarray, poly2 : np.ndarray, N : int, mod : int) ->
     # ensure both polynomials are of length N-1
     #if len(poly1) != N-1 or len(poly2) != N-1:
     #    raise ValueError("Both polynomials must be of length N.")
-
-    result = np.zeros(N-1, dtype=int)
+    full_mul = np.polymul(poly1, poly2)
+    print("FULL MULL", len(full_mul))
+    result = np.zeros(N, dtype=int)
     # multiply polynomials with cyclic convolution
-    for i in range(N-1):
-        for j in range(N-1):
-            k = (i + j) % N-1
-            result[k] = (result[k] + poly1[i] * poly2[j]) % mod
-
+    for i in range(len(full_mul)):
+        new_power = i % N
+        result[new_power] = (result[new_power] + full_mul[i])
+        
+    # Finally, reduce the coefficients modulo 'mod'
+    result = result % mod
+        
     return result
 
 def random_poly(N : int) -> np.ndarray:
@@ -38,12 +41,12 @@ def random_poly(N : int) -> np.ndarray:
     num_zeros = N-1 - ones - neg_ones
 
     poly = np.concatenate((np.ones(ones), -np.ones(neg_ones), np.zeros(num_zeros)))
-    print("Len of poly: ", len(poly))
-    print("Amount Ones", ones)
-    print("Amount neg_ones", neg_ones)
-    print("Amount null", num_zeros)
+    #print("Len of poly: ", len(poly))
+    #print("Amount Ones", ones)
+    #print("Amount neg_ones", neg_ones)
+    #print("Amount null", num_zeros)
     np.random.shuffle(poly)  # shuffle array to get randomized polynomial
-    print("poly shuffled", poly)
+    #print("poly shuffled", poly)
     return poly.astype(int)
 
 def poly_inverse_ring(poly : np.ndarray, N : int, mod : int) -> np.ndarray | None:
