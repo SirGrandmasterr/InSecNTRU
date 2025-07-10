@@ -2,6 +2,7 @@ import numpy as np
 import time
 import ctypes
 from keyCreator import key_gen
+import oqs
 
 from ntru_implementation import ntru_encrypt, ntru_decrypt, generate_random_poly
 
@@ -121,6 +122,45 @@ def compare_with_opensslntru(build_keygen, build_enc, build_dec):
         ref_c = openssl_ref[op]
         factor = build_c / ref_c
         print(f"{op:15}: {build_c:>8} cycles (ref: {ref_c})  => {factor:.1f}× slower")
+
+def avg(lst): return sum(lst) / len(lst)
+
+def benchmark_oqs_cycles(alg_name, iterations=ITERATIONS):
+    keygen_cycles = []
+    enc_cycles = []
+    dec_cycles = []
+
+    print(f"\nBenchmarking {alg_name} in CPU cycles:")
+
+    for _ in range(iterations):
+        # Key Generation
+        start = rdtsc.read_cycles()
+        with oqs.KeyEncapsulation(alg_name) as kem:
+            public_key = kem.generate_keypair()
+        keygen_cycles.append(rdtsc.read_cycles() - start)
+
+        # Encapsulation
+        with oqs.KeyEncapsulation(alg_name) as kem:
+            kem.generate_keypair()
+            start = rdtsc.read_cycles()
+            ciphertext, shared_secret_enc = kem.encap_secret(public_key)
+            enc_cycles.append(rdtsc.read_cycles() - start)
+
+        # Decapsulation
+        with oqs.KeyEncapsulation(alg_name) as kem:
+            kem.generate_keypair()
+            kem.encap_secret(public_key)
+            start = rdtsc.read_cycles()
+            _ = kem.decap_secret(ciphertext)
+            dec_cycles.append(rdtsc.read_cycles() - start)
+
+    print(f"Average KeyGen: {avg(keygen_cycles):.0f} cycles")
+    print(f"Average Encapsulation: {avg(enc_cycles):.0f} cycles")
+    print(f"Average Decapsulation: {avg(dec_cycles):.0f} cycles")
+
+# Run it on NTRU algorithms
+benchmark_oqs_cycles("sntrup761")
+
 
 # --- Run Benchmarks ---
 print("Running NTRU benchmark with:")
