@@ -34,7 +34,7 @@ class TestNTRU(unittest.TestCase):
         self.dr = 15
         self.dm = 15
         
-        print(f"\n--- Running tests with N={self.N}, p={self.p}, q={self.q} ---")
+        
         # Generate keys once for all tests in this class to save time
         try:
             self.h, self.f, self.fp_inv = key_gen(self.N, self.p, self.q, max_tries=500)
@@ -50,14 +50,14 @@ class TestNTRU(unittest.TestCase):
 
     def test_poly_mul(self):
         """Test polynomial multiplication (cyclic convolution)."""
-        print("Testing poly_mul...")
+        print("\n--- Running polynomial multiplication test ---")
         N_test, mod_test = 7, 100
         poly1, poly2 = np.array([1, 1] + [0]*(N_test-2)), np.array([-1, 1] + [0]*(N_test-2))
         expected = np.array([-1, 0, 1] + [0]*(N_test-3))
         result = poly_mul_ring(poly1, poly2, N_test, mod_test)
         result_centered = poly_mod_centered(result, mod_test)
         self.assertPolyEqual(result_centered, expected, "poly_mul (X+1)(X-1) failed")
-        print("poly_mul test passed.")
+        print("\n---         PASSED         ---")
 
     def test_ntru_poly_cycle(self):
         """End-to-end test of NTRU for a single polynomial."""
@@ -67,7 +67,7 @@ class TestNTRU(unittest.TestCase):
         ciphertext = ntru_encrypt(message_poly, blinding_poly, self.h, self.N, self.p, self.q)
         decrypted_message = ntru_decrypt(ciphertext, self.f, self.fp_inv, self.N, self.p, self.q)
         self.assertPolyEqual(message_poly, decrypted_message, "Decryption failed for single polynomial cycle.")
-        print("Single polynomial NTRU cycle test PASSED.")
+        print("\n---         PASSED         ---")
         
     def test_byte_poly_conversion(self):
         """Test the conversion between byte chunks and polynomials."""
@@ -81,7 +81,7 @@ class TestNTRU(unittest.TestCase):
         
         # The recovered bytes should match the original chunk
         self.assertEqual(chunk, recovered_bytes[:len(chunk)])
-        print("Byte-to-poly conversion test PASSED.")
+        print("\n---         PASSED         ---")
 
     def test_string_encryption_decryption(self):
         """End-to-end test for encrypting and decrypting strings."""
@@ -95,7 +95,7 @@ class TestNTRU(unittest.TestCase):
         decrypted_short = ntru_decrypt_string(ciphertexts_short, self.f, self.fp_inv, self.N, self.p, self.q)
         
         self.assertEqual(short_message, decrypted_short, "Decryption failed for short string.")
-        print("Short string test PASSED.")
+        print("\n---         PASSED         ---")
         
         # Test Case 2: Long message (requires multiple blocks)
         long_message = ("NTRU (Nth-degree Truncated polynomial Ring Units) is a lattice-based "
@@ -108,7 +108,7 @@ class TestNTRU(unittest.TestCase):
         decrypted_long = ntru_decrypt_string(ciphertexts_long, self.f, self.fp_inv, self.N, self.p, self.q)
         
         self.assertEqual(long_message, decrypted_long, "Decryption failed for long string.")
-        print("Long string test PASSED.")
+        print("\n---         PASSED         ---")
         
         # Test Case 3: Edge case message (length is a multiple of block size)
         block_size = self.N // 6
@@ -119,8 +119,9 @@ class TestNTRU(unittest.TestCase):
         decrypted_edge = ntru_decrypt_string(ciphertexts_edge, self.f, self.fp_inv, self.N, self.p, self.q)
 
         self.assertEqual(edge_message, decrypted_edge, "Decryption failed for edge case string.")
-        print("Edge case string test PASSED.")
+        print("\n---         PASSED         ---")
 
 
 if __name__ == '__main__':
+    print(f"\n--- Running tests with N={509}, p={7}, q={2048} ---")
     unittest.main(argv=['first-arg-is-ignored'],verbosity=2, exit=False)

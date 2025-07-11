@@ -23,10 +23,6 @@ def poly_mul_ring(poly1: np.ndarray, poly2: np.ndarray, N: int, mod: int) -> np.
     """
     Multiplies two polynomials in the ring R = Z_mod[x] / (x^N - 1).
     This is a corrected implementation that avoids the pitfalls of the previous version.
-
-    The previous implementation misused np.polymul by mixing up coefficient order conventions
-    and had an incorrect algorithm for reducing the product modulo (x^N - 1). This new
-    version implements the convolution manually, which is clearer and correct.
     
     Args:
         poly1: First polynomial as a numpy array of coefficients [c0, c1, ...].
@@ -34,17 +30,15 @@ def poly_mul_ring(poly1: np.ndarray, poly2: np.ndarray, N: int, mod: int) -> np.
         N: The degree of the ring polynomial (x^N - 1).
         mod: The modulus for the coefficients.
 
-    Returns:
-        The resulting polynomial in the ring.
     """
     len1 = len(poly1)
     len2 = len(poly2)
-    # The product can have a degree up to (len1 - 1) + (len2 - 1).
+    
     full_mul_len = len1 + len2 - 1
-    # Use a larger integer type for intermediate products to avoid overflow before the modulo.
+    
     full_mul = np.zeros(full_mul_len, dtype=np.int64)
 
-    # Standard polynomial multiplication (convolution).
+    # Standard polynomial multiplication.
     for i in range(len1):
         if poly1[i] == 0: continue  # Small optimization
         for j in range(len2):
@@ -55,28 +49,16 @@ def poly_mul_ring(poly1: np.ndarray, poly2: np.ndarray, N: int, mod: int) -> np.
     for i in range(full_mul_len):
         result[i % N] += full_mul[i]
 
-    # Finally, reduce the coefficients modulo `mod`.
-    # This produces results in the range [0, mod-1]. The caller (e.g., decryption)
-    # is responsible for centering the coefficients if needed.
+    # Reduce the coefficients modulo `mod`.
+    # This produces results in the range [0, mod-1]. 
     return (result % mod).astype(int)
 
 
 def random_poly(N: int) -> np.ndarray:
     """
     Generates a random ternary polynomial of length N, suitable for use as
-    the private key polynomial 'f' in NTRU.
-    
-    The original implementation generated polynomials that were guaranteed to be
-    non-invertible because the sum of their coefficients was always zero.
-    This meant (x-1) was always a factor, which is also a factor of (x^N-1).
-    
-    This corrected version ensures the sum of coefficients is 1, which makes
-    the polynomial much more likely to be invertible. It uses d ones and d-1
-    negative ones, a standard practice for NTRU.
+    the private key polynomial 'f'.
     """
-    # Standard NTRU uses a fixed number of 1s and -1s, often denoted as d.
-    # We need the sum of coefficients to be non-zero mod 2 for invertibility mod 2^k.
-    # A standard choice is d_f ones and d_f-1 negative ones.
     d = N // 3 
     ones = d
     neg_ones = d - 1 # This ensures the sum of coeffs is 1.
@@ -94,8 +76,6 @@ def random_poly(N: int) -> np.ndarray:
 def poly_inverse_ring(poly: np.ndarray, N: int, mod: int) -> np.ndarray | None:
     """
     Finds the inverse of a polynomial in the ring R = Z_mod[x] / (x^N - 1).
-    Uses SymPy for the heavy lifting of polynomial inversion.
-    This version contains a corrected implementation of Hensel's Lemma.
     """
     x = symbols('x')
     # SymPy's Poly expects coefficients from highest power to lowest.
@@ -114,8 +94,7 @@ def poly_inverse_ring(poly: np.ndarray, N: int, mod: int) -> np.ndarray | None:
             # No inverse exists
             return None
     elif is_power_of_two(mod):
-        # For powers of two, we must use Hensel's Lemma to "lift" the inverse.
-        # The original implementation was missing coefficient reduction inside the loop.
+        # Hensel's Lemma to "lift" the inverse.
         try:
             # 1. Find inverse modulo 2
             p_mod2 = p_int.set_domain(GF(2))
@@ -136,7 +115,6 @@ def poly_inverse_ring(poly: np.ndarray, N: int, mod: int) -> np.ndarray | None:
             current_mod *= 2
             
             # The Hensel's Lemma lifting step: v_new = v * (2 - f * v)
-            # All polynomial operations are done in the ring R, then coefficients are reduced.
             term = (p_int * inv_poly).rem(R_int)
             inv_poly = (inv_poly * (2 - term)).rem(R_int)
             inv_poly = inv_poly.trunc(current_mod)
@@ -164,8 +142,6 @@ def key_gen(N: int, p: int, q: int, max_tries=100) -> tuple:
             # Generate another random polynomial g
             g = random_poly(N)
             # Calculate the public key h = p * f_q * g (mod q)
-            # Note: The original formula is h = f_q * g. Some variants use p*h.
-            # We stick to the simpler h = f_q * g.
             h = poly_mul_ring(f_q, g, N, q)
             return h, f, f_p
         
@@ -173,7 +149,7 @@ def key_gen(N: int, p: int, q: int, max_tries=100) -> tuple:
     raise RuntimeError(f"Maximum tries ({max_tries}) exceeded while generating private key. Could not find an invertible f.")
 
 if __name__ == "__main__":
-    # Example parameters. For real security, these should be larger.
+   
     N = 251 
     p = 3
     q = 128
@@ -181,8 +157,8 @@ if __name__ == "__main__":
     try:
         h, f, f_p = key_gen(N, p, q)
         print("Key generation successful.")
-        # print("Public Key (h):", h)
-        # print("Private Key (f):", f)
-        # print("Private Key Inverse (f_p):", f_p)
+        print("Public Key (h):", h)
+        print("Private Key (f):", f)
+        print("Private Key Inverse (f_p):", f_p)
     except RuntimeError as e:
         print(e)
