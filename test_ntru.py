@@ -71,7 +71,7 @@ class TestNTRU(unittest.TestCase):
         
     def test_byte_poly_conversion(self):
         """Test the conversion between byte chunks and polynomials."""
-        print("\n--- Running byte-to-poly conversion test ---")
+        print("\n--- Running byte-to-poly-to-byte conversion test ---")
         test_bytes = b"Hello, this is a test!"
         block_size = self.N // 6
         chunk = test_bytes[:block_size]
